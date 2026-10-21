@@ -112,7 +112,9 @@ class AudioSystem {
       if (!this.context) return false;
       if (this.context.state === 'suspended') this.context.resume();
       this.enabled = !this.enabled;
-      this.nodes.ocean.gain.setTargetAtTime(this.enabled ? 0.025 : 0, this.context.currentTime, 0.2);
+      this.nodes.ocean.gain.setTargetAtTime(this.enabled ? 0.018 : 0, this.context.currentTime, 0.2);
+      this.nodes.musicGain.gain.setTargetAtTime(this.enabled ? 0.012 : 0, this.context.currentTime, 0.4);
+      this.nodes.padGain.gain.setTargetAtTime(this.enabled ? 0.008 : 0, this.context.currentTime, 0.4);
       return this.enabled;
     } catch (_) { return false; }
   }
@@ -132,12 +134,23 @@ class AudioSystem {
     const engine = c.createGain(); engine.gain.value = 0;
     const engineFilter = c.createBiquadFilter(); engineFilter.type = 'lowpass'; engineFilter.frequency.value = 250;
     osc.connect(engineFilter); engineFilter.connect(engine); engine.connect(c.destination); osc.start();
-    this.context = c; this.nodes = { ocean, engine, osc };
+    const music = c.createOscillator(); music.type = 'triangle'; music.frequency.value = 196;
+    const musicGain = c.createGain(); musicGain.gain.value = 0;
+    const musicFilter = c.createBiquadFilter(); musicFilter.type = 'lowpass'; musicFilter.frequency.value = 950;
+    music.connect(musicFilter); musicFilter.connect(musicGain); musicGain.connect(c.destination); music.start();
+    const pad = c.createOscillator(); pad.type = 'sine'; pad.frequency.value = 246.94;
+    const padGain = c.createGain(); padGain.gain.value = 0;
+    pad.connect(padGain); padGain.connect(c.destination); pad.start();
+    this.context = c; this.nodes = { ocean, engine, osc, music, musicGain, pad, padGain };
   }
   update(driving, speed, time) {
     if (!this.enabled || !this.context) return;
     const now = this.context.currentTime;
-    this.nodes.ocean.gain.setTargetAtTime(0.02 + Math.sin(time) * 0.004, now, 0.4);
+    this.nodes.ocean.gain.setTargetAtTime(0.012 + Math.sin(time*0.7) * 0.003, now, 0.4);
+    const notes=[196,220,246.94,293.66,246.94,220,164.81,196];
+    const beat=Math.floor(time*0.72)%notes.length;
+    this.nodes.music.frequency.setTargetAtTime(notes[beat],now,0.16);
+    this.nodes.pad.frequency.setTargetAtTime(notes[(beat+2)%notes.length]*1.5,now,0.3);
     this.nodes.engine.gain.setTargetAtTime(driving ? 0.025 : 0, now, 0.12);
     this.nodes.osc.frequency.setTargetAtTime(45 + speed * 4, now, 0.12);
   }
@@ -219,38 +232,52 @@ class Vehicle {
 
 class Character {
   constructor(color = 0x06b6d4) {
-    this.group = new THREE.Group(); this.phase = Math.random() * 6; this.grounded = true; this.velocityY = 0;
-    const mat = (c, rough = 0.75) => new THREE.MeshStandardMaterial({ color: c, roughness: rough });
-    this.hips = new THREE.Group(); this.hips.position.y = 0.9; this.group.add(this.hips);
-    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.6,0.26), mat(color));
-    torso.position.y = 0.32; torso.castShadow = true; this.hips.add(torso);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.18,14,12), mat(0xd6a078));
-    head.position.y = 0.75; head.castShadow = true; this.hips.add(head);
-    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.185,12,8,0,Math.PI*2,0,Math.PI*0.55), mat(0x171923));
-    hair.position.copy(head.position); this.hips.add(hair);
-    this.arms = []; this.legs = [];
-    [-1,1].forEach((side) => {
-      const arm = new THREE.Group(); arm.position.set(side*0.3,0.53,0); torso.add(arm);
-      const sleeve = new THREE.Mesh(new THREE.CapsuleGeometry(0.065,0.26,3,7),mat(color));
-      sleeve.position.y = -0.17; arm.add(sleeve); this.arms.push(arm);
-      const leg = new THREE.Group(); leg.position.set(side*0.12,0,0); this.hips.add(leg);
-      const pants = new THREE.Mesh(new THREE.BoxGeometry(0.15,0.48,0.16),mat(0x1e293b));
-      pants.position.y = -0.34; leg.add(pants);
-      const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.16,0.09,0.24),mat(0xe2e8f0));
-      shoe.position.set(0,-0.61,0.04); leg.add(shoe); this.legs.push(leg);
-    });
+    this.group = new THREE.Group(); this.phase = Math.random() * 6;
+    this.grounded = true; this.velocityY = 0;
+    const mat = (c, rough = 0.72, metalness = 0) => new THREE.MeshStandardMaterial({ color:c, roughness:rough, metalness });
+    this.skin = mat(0xc78f68); this.shirt = mat(color); this.pantsMat = mat(0x172536); this.shoeMat = mat(0xe2e8f0,0.38);
+    this.rig = new THREE.Group(); this.rig.position.y = 0.22; this.group.add(this.rig);
+    this.hips = new THREE.Group(); this.hips.position.y = 0.88; this.rig.add(this.hips);
+    const mesh=(geo,material,pos,parent=this.hips)=>{const m=new THREE.Mesh(geo,material);m.position.set(...pos);m.castShadow=true;m.receiveShadow=true;parent.add(m);return m;};
+    mesh(new THREE.CapsuleGeometry(0.22,0.34,4,8),this.shirt,[0,0.27,0]);
+    mesh(new THREE.BoxGeometry(0.35,0.18,0.24),this.pantsMat,[0,-0.04,0]);
+    mesh(new THREE.CylinderGeometry(0.075,0.08,0.12,10),this.skin,[0,0.59,0]);
+    this.headPivot=new THREE.Group();this.headPivot.position.set(0,0.65,0);this.hips.add(this.headPivot);
+    mesh(new THREE.SphereGeometry(0.17,16,12),this.skin,[0,0.12,0],this.headPivot);
+    mesh(new THREE.SphereGeometry(0.178,14,8,0,Math.PI*2,0,Math.PI*0.52),mat(0x191820),[0,0.16,-0.015],this.headPivot);
+    mesh(new THREE.SphereGeometry(0.035,8,8),mat(0x211a18),[0.065,0.12,0.151],this.headPivot);
+    this.arms=[];this.forearms=[];this.legs=[];this.feet=[];
+    for(const side of [-1,1]){
+      const arm=new THREE.Group();arm.position.set(side*0.28,0.49,0);this.hips.add(arm);
+      mesh(new THREE.CapsuleGeometry(0.075,0.25,4,8),this.shirt,[0,-0.17,0],arm);
+      const elbow=new THREE.Group();elbow.position.set(0,-0.32,0);arm.add(elbow);
+      mesh(new THREE.CapsuleGeometry(0.057,0.22,4,8),this.skin,[0,-0.13,0.005],elbow);
+      mesh(new THREE.SphereGeometry(0.064,10,8),this.skin,[0,-0.29,0.012],elbow);
+      this.arms.push(arm);this.forearms.push(elbow);
+      const leg=new THREE.Group();leg.position.set(side*0.115,-0.07,0);this.hips.add(leg);
+      mesh(new THREE.CapsuleGeometry(0.085,0.29,4,8),this.pantsMat,[0,-0.22,0],leg);
+      mesh(new THREE.BoxGeometry(0.15,0.09,0.24),this.shoeMat,[0,-0.43,0.055],leg);
+      this.legs.push(leg);this.feet.push(leg);
+    }
+    this.hips.rotation.order='YXZ';
   }
-  animate(dt, speed, time) {
-    this.phase += dt * (speed > 0.1 ? 9 : 2);
-    const swing = speed > 0.1 ? Math.min(0.65, speed * 0.08) : 0.025;
-    this.legs[0].rotation.x = Math.sin(this.phase) * swing;
-    this.legs[1].rotation.x = -Math.sin(this.phase) * swing;
-    this.arms[0].rotation.x = -Math.sin(this.phase) * swing * 0.75;
-    this.arms[1].rotation.x = Math.sin(this.phase) * swing * 0.75;
-    this.hips.position.y = 0.9 + (speed > 0.1 ? Math.abs(Math.sin(this.phase))*0.035 : Math.sin(time*2)*0.012);
+  animate(dt,speed,time) {
+    this.phase += dt*(speed>0.12?10:1.8);
+    const moving=speed>0.12, swing=moving?Math.min(0.72,speed*0.1):0.035;
+    const wave=Math.sin(this.phase);
+    this.legs[0].rotation.x=wave*swing;
+    this.legs[1].rotation.x=-wave*swing;
+    this.arms[0].rotation.x=-wave*swing*1.05;
+    this.arms[1].rotation.x=wave*swing*1.05;
+    this.arms[0].rotation.z=0.04;this.arms[1].rotation.z=-0.04;
+    this.forearms[0].rotation.x=-0.15-Math.max(0,wave)*0.32;
+    this.forearms[1].rotation.x=-0.15+Math.max(0,wave)*0.32;
+    this.hips.position.y=0.88+(moving?Math.abs(wave)*0.035:Math.sin(time*1.6)*0.008);
+    this.hips.rotation.z=moving?Math.sin(this.phase)*0.035:0;
+    this.headPivot.rotation.x=moving?Math.sin(this.phase*0.5)*0.025:Math.sin(time)*0.012;
+    this.rig.rotation.x=this.grounded===false?-0.06:0;
   }
 }
-
 class CoastalWorld {
   constructor(game) {
     this.game = game; this.scene = game.scene; this.palms = []; this.facades = []; this.streetLights = [];
@@ -418,6 +445,9 @@ class GameUI {
     this.onRain=()=>this.game.toggleRain();
     this.onAudio=()=>{$('btn-audio').textContent=this.audio.toggle()?'SOUND ON':'SOUND OFF';};
     this.onQuality=()=>this.game.toggleQuality();
+    $('settings-toggle').addEventListener('click',()=>{const panel=$('settings-panel');const open=panel.classList.toggle('open');$('settings-toggle').setAttribute('aria-expanded',String(open));});
+    $('start-mission').addEventListener('click',()=>{this.game.startMission();$('settings-panel').classList.remove('open');$('settings-toggle').setAttribute('aria-expanded','false');});
+    $('mission-next').addEventListener('click',()=>this.game.startMission(true));
   }
   update(focus,speed,driving,fps) {
     $('speed-value').textContent=String(Math.round(speed*2.237)).padStart(2,'0');
@@ -456,12 +486,12 @@ class SunstateGame {
     this.sun=new THREE.DirectionalLight(0xfff0cf,2.25);this.sun.position.set(-35,70,28);this.sun.castShadow=true;
     this.sun.shadow.mapSize.set(1024,1024);this.sun.shadow.camera.near=1;this.sun.shadow.camera.far=180;
     Object.assign(this.sun.shadow.camera,{left:-60,right:60,top:60,bottom:-60});this.sun.shadow.bias=-0.00015;this.sun.shadow.normalBias=0.025;this.scene.add(this.sun);
-    this.world=new CoastalWorld(this);this.vehicles=[];this.npcs=[];this.time=0;this.rain=false;this.quality=true;this.preset='day';this.driving=false;this.activeCar=null;this.orbit=0;this.lastFps=60;
+    this.world=new CoastalWorld(this);this.vehicles=[];this.npcs=[];this.time=0;this.missionActive=false;this.missionIndex=0;this.missionPoints=[];this.missionMarkers=[];this.rain=false;this.quality=true;this.preset='day';this.driving=false;this.activeCar=null;this.orbit=0;this.lastFps=60;
     this.player=new Character();this.player.group.position.set(-10.5,0.22,0);this.scene.add(this.player.group);
     [[-4.2,4.5,0xf43f5e,0,false],[-4.2,-22,0xfacc15,0,false],[3.6,-55,0x22d3ee,0,true],[3.6,45,0xa855f7,0,true],[-3.6,75,0x10b981,Math.PI,true],[-3.6,-85,0xf97316,Math.PI,true]].forEach(s=>this.vehicles.push(new Vehicle(this.scene,s[0],s[1],s[2],s[3],s[4])));
     const colors=[0xef476f,0xf59e0b,0x10b981,0x8b5cf6,0xec4899,0x3b82f6];
     for(let i=0;i<14;i++){const n=new Character(colors[i%colors.length]);n.group.position.set(i%2===0?-12.5+rand(-1,1):11+rand(-1,1),0.22,-110+i*16);n.direction=i%2===0?1:-1;n.startle=0;this.npcs.push(n);this.scene.add(n.group);}
-    this.ui=new GameUI(this);this.input=new InputController(this.renderer,this.ui);this.bindResize();this.setLighting('day');
+    this.ui=new GameUI(this);this.input=new InputController(this.renderer,this.ui);this.bindResize();this.setLighting('day');this.buildMissions();
     this.clock=new THREE.Clock();this.frames=0;this.fpsElapsed=0;this.animate();
   }
   bindResize() {
@@ -483,6 +513,31 @@ class SunstateGame {
     const car=this.nearestVehicle(5.5);
     if(!car){$('prompt-banner').textContent='Move closer to a car';$('prompt-banner').style.opacity='1';setTimeout(()=>{$('prompt-banner').style.opacity='0';},1200);return;}
     this.activeCar=car;this.driving=true;car.traffic=false;this.player.group.visible=false;
+  }
+  buildMissions(){
+    this.missionPoints=[new THREE.Vector3(-3.5,0,-28),new THREE.Vector3(4,0,22),new THREE.Vector3(17,0,66),new THREE.Vector3(30,0,112),new THREE.Vector3(-2,0,148)];
+    this.missionMarkers=this.missionPoints.map((p,i)=>{
+      const g=new THREE.Group();g.position.copy(p);g.position.y=0.15;
+      const ring=new THREE.Mesh(new THREE.TorusGeometry(2.4,0.14,10,40),new THREE.MeshBasicMaterial({color:0x67e8f9}));
+      ring.rotation.x=Math.PI/2;g.add(ring);
+      const beam=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.5,4,12,1,true),new THREE.MeshBasicMaterial({color:0x67e8f9,transparent:true,opacity:0.18,side:THREE.DoubleSide}));
+      beam.position.y=2;g.add(beam);
+      const core=new THREE.Mesh(new THREE.OctahedronGeometry(0.35,1),new THREE.MeshStandardMaterial({color:0xffffff,emissive:0x06b6d4,emissiveIntensity:2,metalness:0.3,roughness:0.2}));
+      core.position.y=2.8;g.add(core);g.visible=false;this.scene.add(g);return {group:g,ring,core,index:i};
+    });
+  }
+  startMission(restart=false){
+    if(restart){this.missionIndex=0;}
+    this.missionActive=true;
+    this.missionMarkers.forEach((m,i)=>m.group.visible=i===this.missionIndex);
+    $('mission-panel').classList.add('visible');
+    this.updateMissionText();
+  }
+  updateMissionText(){
+    const names=['Reach Ocean Drive','Visit the Surf Shop','Find the Beach Promenade','Reach Golden Beach','Finish the Coast Run'];
+    $('mission-title').textContent=this.missionIndex===4?'COAST RUN COMPLETE':'COAST RUN • '+(this.missionIndex+1)+'/5';
+    $('mission-objective').textContent=this.missionIndex===4?'Mission complete! Start again to replay.':names[this.missionIndex];
+    $('mission-next').textContent=this.missionIndex===4?'REPLAY':'RESTART';
   }
   jump(){if(!this.driving&&this.player.grounded!==false){this.player.velocityY=6.5;this.player.grounded=false;}}
   setLighting(preset) {
@@ -551,6 +606,24 @@ class SunstateGame {
       if(n.startle>0)n.startle-=dt;n.animate(dt,v,this.time);
     });
     this.world.update(this.time,dt,this.rain);
+    if(this.missionActive){
+      this.missionMarkers.forEach((m,i)=>{if(m.group.visible){m.ring.rotation.z+=dt*0.8;m.core.rotation.y+=dt*1.8;m.core.rotation.x+=dt*0.8;}});
+      const target=this.missionPoints[this.missionIndex];
+      if(target&&Math.hypot(focus.x-target.x,focus.z-target.z)<4.2){
+        this.missionMarkers[this.missionIndex].group.visible=false;
+        this.missionIndex=Math.min(this.missionIndex+1,this.missionPoints.length-1);
+        if(this.missionIndex===4&&Math.hypot(focus.x-this.missionPoints[4].x,focus.z-this.missionPoints[4].z)<4.2){
+          this.missionMarkers[this.missionIndex].group.visible=false;
+          this.missionIndex=4;
+          $('mission-title').textContent='COAST RUN COMPLETE';
+          $('mission-objective').textContent='Great driving! You completed the coastal route.';
+          $('mission-next').textContent='REPLAY';
+          this.missionActive=false;
+        }else{
+          this.missionMarkers[this.missionIndex].group.visible=true;this.updateMissionText();
+        }
+      }
+    }
     if(this.rain&&this.rainSystem){
       const a=this.rainSystem.geometry.attributes.position;
       for(let i=0;i<a.count;i++){let y=a.getY(i)-22*dt;if(y<0)y=28;a.setY(i,y);}
