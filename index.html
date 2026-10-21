@@ -24,7 +24,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#07111e;col
 #location-label{font-size:10px;color:#a5f3fc;margin-top:5px}
 .badges{display:flex;gap:5px;margin-top:5px;font-size:9px;font-family:monospace}
 .badges span{background:#15283a;border-radius:5px;padding:3px 5px;color:#a5f3fc}
-.controls{display:flex;justify-content:flex-end;flex-wrap:wrap;gap:5px;padding:6px;max-width:58%;pointer-events:auto}
+.controls{display:flex;justify-content:flex-end;gap:5px;padding:5px;pointer-events:auto}.settings-toggle{width:48px;height:48px;border-radius:15px;font-size:20px;padding:0;background:linear-gradient(145deg,#0e7490e8,#312e81e8)}.settings-panel{position:fixed;right:9px;top:66px;width:min(270px,calc(100vw - 22px));padding:12px;display:none;pointer-events:auto;z-index:8}.settings-panel.open{display:block;animation:panelIn .16s ease-out}@keyframes panelIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}.settings-panel h2{font:800 14px Outfit;margin:0 0 9px;color:#a5f3fc}.settings-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:6px}.settings-grid button{padding:10px 5px}#start-mission{width:100%;margin-top:8px;background:linear-gradient(110deg,#0891b2,#6d28d9);padding:12px}.mission-panel{position:fixed;left:50%;top:82px;transform:translateX(-50%);width:min(280px,calc(100vw - 28px));padding:10px 13px;display:none;pointer-events:auto;z-index:4;border-color:#67e8f977;background:rgba(5,16,29,.9)}.mission-panel.visible{display:block}.mission-kicker{font:800 9px monospace;letter-spacing:.15em;color:#67e8f9}#mission-title{font:800 14px Outfit;margin:4px 0}#mission-objective{font-size:11px;color:#dbeafe;line-height:1.4}#mission-next{margin-top:8px;width:100%;background:linear-gradient(110deg,#0891b2,#6d28d9)}
 button{font:800 10px Inter,sans-serif;color:#eafaff;border:1px solid #ffffff25;background:#132338e8;border-radius:10px;padding:8px 9px;cursor:pointer;touch-action:manipulation;white-space:nowrap}
 button:active{transform:scale(.95)}button.active{background:linear-gradient(120deg,#0891b2,#7c3aed);border-color:#a5f3fc}
 #prompt-banner{align-self:center;margin:auto 0;opacity:0;transition:opacity .18s;background:#07111edb;border:1px solid #fbbf2480;color:#fde68a;padding:10px 16px;border-radius:999px;font-size:12px;font-weight:800;text-align:center}
@@ -48,11 +48,11 @@ button:active{transform:scale(.95)}button.active{background:linear-gradient(120d
 @media(max-width:650px){
  .overlay{padding:max(7px,env(safe-area-inset-top)) max(7px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(7px,env(safe-area-inset-left))}
  .top{gap:5px}.brand{gap:7px;padding:6px}.radar{width:40px;height:40px}
- .controls{max-width:60%;gap:4px;padding:5px}.controls button{font-size:9px;padding:7px 6px}
+ .controls{max-width:none;gap:4px;padding:0}.settings-toggle{width:43px;height:43px}.settings-panel{top:58px;right:7px}.mission-panel{top:65px}
  .bottom{gap:5px}.telemetry{padding:8px;gap:7px}.telemetry .extra{display:none}
  #joystick-zone{width:92px;height:92px}.actions{gap:4px}.actions button{min-width:52px;padding:8px 5px;font-size:9px}
 }
-@media(max-width:390px){.radar{display:none}.brand h1{font-size:10px}.controls{max-width:64%}.controls button{padding:6px 5px}.telemetry{gap:5px;padding:7px}.actions button{min-width:47px}.hint{font-size:8px}}
+@media(max-width:390px){.radar{display:none}.brand h1{font-size:10px}.mission-panel{top:58px;padding:8px 10px}.telemetry{gap:5px;padding:7px}.actions button{min-width:47px}.hint{font-size:8px}}
 </style>
 </head>
 <body>
@@ -67,10 +67,21 @@ button:active{transform:scale(.95)}button.active{background:linear-gradient(120d
         <div class="badges"><span id="fps-badge">FPS --</span><span id="mode-badge">ON FOOT</span></div>
       </div>
     </div>
-    <div class="hud controls">
-      <button id="btn-day" class="active">☀ DAY</button><button id="btn-sunset">SUNSET</button><button id="btn-night">NIGHT</button>
-      <button id="btn-rain">RAIN OFF</button><button id="btn-audio">SOUND OFF</button><button id="btn-quality">QUALITY: HIGH</button>
+    <div class="hud controls"><button id="settings-toggle" class="settings-toggle" aria-label="Settings" aria-expanded="false">⚙</button></div>
+  </div>
+  <div id="settings-panel" class="hud settings-panel">
+    <h2>WORLD SETTINGS</h2>
+    <div class="settings-grid">
+      <button id="btn-day" class="active">DAY</button><button id="btn-sunset">SUNSET</button><button id="btn-night">NIGHT</button>
+      <button id="btn-rain">RAIN OFF</button><button id="btn-audio">MUSIC OFF</button><button id="btn-quality">QUALITY: HIGH</button>
     </div>
+    <button id="start-mission">START COAST RUN</button>
+  </div>
+  <div id="mission-panel" class="hud mission-panel">
+    <div class="mission-kicker">MISSION OBJECTIVE</div>
+    <div id="mission-title">COAST RUN 1/5</div>
+    <div id="mission-objective">Reach Ocean Drive</div>
+    <button id="mission-next">RESTART</button>
   </div>
   <div id="prompt-banner">Move closer to a car to drive</div>
   <div class="bottom">
