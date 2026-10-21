@@ -219,7 +219,7 @@ class Vehicle {
 
 class Character {
   constructor(color = 0x06b6d4) {
-    this.group = new THREE.Group(); this.phase = Math.random() * 6;
+    this.group = new THREE.Group(); this.phase = Math.random() * 6; this.grounded = true; this.velocityY = 0;
     const mat = (c, rough = 0.75) => new THREE.MeshStandardMaterial({ color: c, roughness: rough });
     this.hips = new THREE.Group(); this.hips.position.y = 0.9; this.group.add(this.hips);
     const torso = new THREE.Mesh(new THREE.BoxGeometry(0.44,0.6,0.26), mat(color));
@@ -424,7 +424,21 @@ class GameUI {
     $('fps-badge').textContent='FPS '+Math.round(fps);
     $('mode-badge').textContent=driving?'DRIVING':'ON FOOT';
     $('location-label').textContent=focus.x>17?'Golden Beach':(focus.x<-17?'Coastline District':'Ocean Drive');
+    $('status-text').textContent=driving?'CRUISING':'EXPLORE FREELY';
     $('prompt-banner').style.opacity=!driving&&this.game.nearestVehicle(6)?'1':'0';
+    const canvas=$('radar-canvas'),ctx=canvas.getContext('2d');
+    ctx.fillStyle='#07111e';ctx.fillRect(0,0,128,128);
+    ctx.fillStyle='#58616d';ctx.fillRect(38,0,39,128);
+    ctx.fillStyle='#d8c69c';ctx.fillRect(78,0,18,128);
+    ctx.fillStyle='#087fa5';ctx.fillRect(97,0,31,128);
+    ctx.strokeStyle='#ffffff25';ctx.lineWidth=1;
+    for(let y=0;y<128;y+=16){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(128,y);ctx.stroke();}
+    this.game.vehicles.forEach(car=>{
+      const x=64+(car.x-focus.x)*1.05,y=64-(car.z-focus.z)*0.55;
+      if(x>-3&&x<131&&y>-3&&y<131){ctx.fillStyle=car===this.game.activeCar?'#67e8f9':'#fb7185';ctx.fillRect(x-2,y-2,4,4);}
+    });
+    ctx.save();ctx.translate(64,64);ctx.rotate(-((driving&&this.game.activeCar)?this.game.activeCar.heading:this.game.player.group.rotation.y));
+    ctx.fillStyle='#4ade80';ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(5,5);ctx.lineTo(-5,5);ctx.closePath();ctx.fill();ctx.restore();
   }
 }
 
